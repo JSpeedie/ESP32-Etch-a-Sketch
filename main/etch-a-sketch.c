@@ -62,6 +62,26 @@ struct game_state game_state = {
 double cursor_size = 1;
 
 
+/* Returns a value from (-1, 1) depending on the size of the value x. */
+double fast_sigmoid(double x) {
+    return x / (1 + fabs(x));
+}
+
+
+/* Returns a value from (0, 1) depending on the size of the value x. */
+double fast_sigmoid2(double x) {
+    return 0.5 * (x / (1 + fabs(x)) + 1);
+}
+
+
+/* Returns a value from [0, 1] depending on the size of the value x.
+ * This function is used to handle noise in input, returning a factor
+ * that would shrink a change if the change is small. */
+double certainty_factor(double x) {
+    return (1 / (-pow(x-0.25, 4) - 1)) + 1;
+}
+
+
 void merge_sort(int *arr, int arr_size) {
 
     if (arr_size > 2) {
@@ -271,8 +291,8 @@ void get_input(void *arg) {
     double vert_val = 0;
 
     /* Potentiometer Initialization {{{ */
-    int pot_sample_per_tick = 20;
-    int pot_prev_tick_samples_saved = 5;
+    int pot_sample_per_tick = 25;
+    int pot_prev_tick_samples_saved = 3;
     int pot_prev_tick_index = 0;
     int pot_h_prev_tick[pot_prev_tick_samples_saved];
     int pot_v_prev_tick[pot_prev_tick_samples_saved];
@@ -320,31 +340,9 @@ void get_input(void *arg) {
                 potentiometer_vert_channel, &pot_v_samples[a]));
         }
 
-        /* printf("h_samples unsorted: ["); */
-        /* for (int i = 0; i < pot_sample_per_tick; i++) { */
-        /*     printf("%d ", pot_h_samples[i]); */
-        /* } */
-        /* printf("] \n"); */
-        /* printf("v_samples unsorted: ["); */
-        /* for (int i = 0; i < pot_sample_per_tick; i++) { */
-        /*     printf("%d ", pot_v_samples[i]); */
-        /* } */
-        /* printf("] \n"); */
-
         /* Sort the samples from this tick (so we can find the median) */
         merge_sort(&pot_h_samples[0], pot_sample_per_tick);
         merge_sort(&pot_v_samples[0], pot_sample_per_tick);
-
-        /* printf("h_samples sorted: ["); */
-        /* for (int i = 0; i < pot_sample_per_tick; i++) { */
-        /*     printf("%d ", pot_h_samples[i]); */
-        /* } */
-        /* printf("] \n"); */
-        /* printf("v_samples sorted: ["); */
-        /* for (int i = 0; i < pot_sample_per_tick; i++) { */
-        /*     printf("%d ", pot_v_samples[i]); */
-        /* } */
-        /* printf("] \n"); */
 
         /* Save the median from the samples collected this tick in the saved
          * medians array */
@@ -376,17 +374,26 @@ void get_input(void *arg) {
              * ball could occupy */
             double temp_new_cursor_x = (horiz_val / (double) 8.062992126);
             double temp_new_cursor_y = (vert_val / (double) 8.062992126);
-            /* Only change the cursor x or y if the new cursor x or y location
-             * is more than 65% of a pixel into the next pixel. This is to help
-             * with drawing straight lines */
-            if (fabs(temp_new_cursor_x - game_state.cursor_x + 0.5) > 0.5 + 0.65) {
-                game_state.cursor_x = round(temp_new_cursor_x);
-            }
-            if (fabs(temp_new_cursor_y - game_state.cursor_y + 0.5) > 0.5 + 0.65) {
-                game_state.cursor_y = round(temp_new_cursor_y);
-            }
 
-            printf("new cursor (x, y) = (%d, %d)\n", game_state.cursor_x, game_state.cursor_y);
+            /* Put the input through one final anti-noise filter. Here we use a
+             * custom made function to impart a smaller change on the cursor's
+             * position if the perceived change (i.e. dx_c, dy_c) is small. For
+             * instance, if the perceived change in the cursor's x position is
+             * 0.5, this gives a certainty factor of ~0.004, greatly reducing
+             * how much the cursor's x position will be shifted. We don't want
+             * large perceived changes to be affected however, and this is
+             * reflected in the function. For a perceived change of 3, we get a
+             * certainty factor of ~0.983, hardly changing how the cursor will
+             * be moved. */
+
+            /* We add 0.5 to the current cursor position because it better
+             * represents the cursor's position as being in-the-middle of
+             * the pixel */
+            double dx_c = temp_new_cursor_x - (double) (game_state.cursor_x + 0.5);
+            game_state.cursor_x += round(certainty_factor(dx_c) * dx_c);
+
+            double dy_c = temp_new_cursor_y - (double) (game_state.cursor_y + 0.5);
+            game_state.cursor_y += round(certainty_factor(dy_c) * dy_c);
 
             /* Make sure the ball's position respects the bounds */
             if (game_state.cursor_x < 0) {
