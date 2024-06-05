@@ -68,14 +68,15 @@ and to give it power.
 
 The most challenging part of this project was getting the device to draw a
 perfectly horizontal or vertical lines. This is the expected behaviour when a
-user turns only one of the dials. In the early stages of the project, once the
-core functionality existed, turning only one of the horizontal or vertical
-dials resulted in chopping lines that would be decorated with little spikes
-where the program had calculated that the cursor should be on the adjacent
-line, only to quickly recalculate that that was an error. It seemed to me that
-the cause of this was noise from the ADC/potentiometers. My thought was that if
-values from the ADCs (representing the rotation of the potentiometer) are not
-accurately read, there might be a pixel or three of shake in the cursor.
+user turns only one of the dials. In the early stages of the project when the
+core functionality had just barely been achieved, turning only one of the
+horizontal or vertical dials resulted in chopping lines that would be decorated
+with little spikes where the program had one moment calculated that the cursor
+should be on the adjacent line, and the next calculated that the first line was
+correct. It seemed to me that the cause of this was noise from the
+ADC/potentiometers. My thought was that if values from the ADCs (representing
+the rotation of the potentiometer) are not accurately read, there might be a
+pixel or three of shake in the cursor.
 
 This led to my first attempt to solve the problem. If the signal is noisy,
 perhaps taking multiple samples per tick and then averaging them would produce
@@ -138,18 +139,28 @@ do the job, but the ramp from squishing values (the function returning
 something like 0.001) to approximating values (the function returning something
 like 0.999) was not steep enough. I ended up designing an purpose-built
 function based off of the asymptotic function $1/x$. The first attempt I felt
-was worth committing used the function ${1}/{{-(x-0.25)}^{4}-1}+1$. What I have
-committed at the time of writing is ${2}/{{-(x-0.25)}^{4}-2}+1$. Here's how
-they compare:
+was worth committing used the function:
+
+```math
+\frac{1}{{-(x-0.25)}^{4}-1}+1
+```
+
+What I have committed at the time of writing is:
+
+```math
+\frac{2}{{-(x-0.25)}^{4}-2}+1$
+```
+
+Here's how they compare:
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/wiki/JSpeedie/ESP32-Etch-a-Sketch/images/certainty_factor_first_attempt_v_second_attempt.png" width="66%"/>
+  <img src="https://raw.githubusercontent.com/wiki/JSpeedie/ESP32-Etch-a-Sketch/images/certainty_factor_first_attempt_v_second_attempt.png" width="80%"/>
 </p>
 
 I also considered a more aggressive version of my second attempt shown in orange here:
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/wiki/JSpeedie/ESP32-Etch-a-Sketch/images/certainty_factor_first_attempt_v_second_attempt_v_possible_third.png" width="66%"/>
+  <img src="https://raw.githubusercontent.com/wiki/JSpeedie/ESP32-Etch-a-Sketch/images/certainty_factor_first_attempt_v_second_attempt_v_possible_third.png" width="80%"/>
 </p>
 
 Finally, here's a graph showing how my first attempt and second attempt
@@ -159,7 +170,7 @@ up experiencing, while the x axis represents the what that change in x or y
 coordinate was pre-filter.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/wiki/JSpeedie/ESP32-Etch-a-Sketch/images/certainty_factor_first_attempt_v_second_attempt_plus_output.png" width="66%"/>
+  <img src="https://raw.githubusercontent.com/wiki/JSpeedie/ESP32-Etch-a-Sketch/images/certainty_factor_first_attempt_v_second_attempt_plus_output.png" width="70%"/>
 </p>
 
 &nbsp;
