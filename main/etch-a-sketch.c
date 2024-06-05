@@ -78,7 +78,7 @@ double fast_sigmoid2(double x) {
  * This function is used to handle noise in input, returning a factor
  * that would shrink a change if the change is small. */
 double certainty_factor(double x) {
-    return (1 / (-pow(x-0.25, 4) - 1)) + 1;
+    return (2 / (-pow(x-0.25, 4) - 2)) + 1;
 }
 
 
