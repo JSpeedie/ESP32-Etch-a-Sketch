@@ -186,6 +186,8 @@ void paint_oled(void *arg) {
     TickType_t lastWakeTime;
     uint8_t cursor_x = game_state.cursor_x;
     uint8_t cursor_y = game_state.cursor_y;
+    uint8_t prev_cursor_x = game_state.cursor_x;
+    uint8_t prev_cursor_y = game_state.cursor_y;
     int screen_clear = 0;
 
     while (1) {
@@ -194,17 +196,50 @@ void paint_oled(void *arg) {
 
         /* Update the stored location of the ball */
         if (xSemaphoreTake(input_semaphore, portMAX_DELAY) == pdTRUE) {
+            prev_cursor_x = cursor_x;
+            prev_cursor_y = cursor_y;
             cursor_x = game_state.cursor_x;
             cursor_y = game_state.cursor_y;
             xSemaphoreGive(input_semaphore);
         }
 
-        /* Update oled_screen array to have pixel at the new location of the
-         * cursor painted white. Because the display is technically 128 by 128
-         * pixels but is represented in memory as 64 columns by 128 rows where
-         * each element in a column is a pair representing two horizontally
-         * adjacent pixels, this is how we set the pixel at (x, y) on. */
-        oled_screen[(64 * cursor_y) + (cursor_x / 2)] |= 0xf0 >> (cursor_x % 2);
+        /* Calculate the length of the line between the previous cursor
+         * location and the current cursor location */
+        int dx = cursor_x - prev_cursor_x;
+        int dy = cursor_y - prev_cursor_y;
+        /* a^2 + b^2 = c^2 */
+        int line_length = sqrt((dx * dx) + (dy * dy));
+
+        int spot_x = prev_cursor_x;
+        int spot_y = prev_cursor_y;
+        int d_spot_x = round((double) dx / (double) line_length);
+        int d_spot_y = round((double) dy / (double) line_length);
+
+        /* Paint white pixels at the spots along the line. This is done
+         * to avoid gaps when the cursor is moved quickly */
+        for (int i = 0; i < line_length; i++) {
+            /* Update oled_screen array to have pixel at the specified location
+             * painted white. Because the display is technically 128 by 128
+             * pixels but is represented in memory as 64 columns by 128 rows
+             * where each element in a column is a pair representing two
+             * horizontally adjacent pixels, this is how we set the pixel at
+             * (x, y) on. */
+            if (spot_x % 2 == 0) {
+                oled_screen[(64 * spot_y) + (spot_x / 2)] |= 0xf0;
+            } else {
+                oled_screen[(64 * spot_y) + (spot_x / 2)] |= 0x0f;
+            }
+            spot_x += d_spot_x;
+            spot_y += d_spot_y;
+        }
+
+        /* UNpaint the final spot (the new location of the cursor), like
+         * the real toy */
+        if (cursor_x % 2 == 0) {
+            oled_screen[(64 * cursor_y) + (cursor_x / 2)] &= 0x0f;
+        } else {
+            oled_screen[(64 * cursor_y) + (cursor_x / 2)] &= 0xf0;
+        }
 
         /* If the screen clear button was pressed, erase the screen */
         screen_clear = gpio_get_level(GPIO_SCREEN_CLEAR_BUTTON_PIN_NUM);
@@ -342,12 +377,12 @@ void get_input(void *arg) {
             double temp_new_cursor_x = (horiz_val / (double) 8.062992126);
             double temp_new_cursor_y = (vert_val / (double) 8.062992126);
             /* Only change the cursor x or y if the new cursor x or y location
-             * is more than 50% of a pixel into the next pixel. This is to help
+             * is more than 65% of a pixel into the next pixel. This is to help
              * with drawing straight lines */
-            if (fabs(temp_new_cursor_x - game_state.cursor_x + 0.5) > 0.5) {
+            if (fabs(temp_new_cursor_x - game_state.cursor_x + 0.5) > 0.5 + 0.65) {
                 game_state.cursor_x = round(temp_new_cursor_x);
             }
-            if (fabs(temp_new_cursor_y - game_state.cursor_y + 0.5) > 0.5) {
+            if (fabs(temp_new_cursor_y - game_state.cursor_y + 0.5) > 0.5 + 0.65) {
                 game_state.cursor_y = round(temp_new_cursor_y);
             }
 
