@@ -62,6 +62,58 @@ struct game_state game_state = {
 double cursor_size = 1;
 
 
+void merge_sort(int *arr, int arr_size) {
+
+    if (arr_size > 2) {
+        /* Merge sort the two halfs of the array individually */
+        merge_sort(&arr[0], (arr_size / 2));
+        merge_sort(&arr[arr_size / 2], ((arr_size + 1) / 2));
+
+        /* Zip together the two sorted arrays */
+        int i_a = 0;
+        int i_b = arr_size / 2;
+        int temp[arr_size];
+
+        for (int i = 0; i < arr_size; i++) {
+            if (i_b >= arr_size) {
+                temp[i] = arr[i_a];
+                i_a++;
+                continue;
+            }
+            if (i_a >= arr_size / 2) {
+                temp[i] = arr[i_b];
+                i_b++;
+                continue;
+            }
+            if (arr[i_a] <= arr[i_b]) {
+                temp[i] = arr[i_a];
+                i_a++;
+            } else {
+                temp[i] = arr[i_b];
+                i_b++;
+            }
+        }
+
+        /* Copy the contents of the temp array back into the original array */
+        for (int i = 0; i < arr_size; i++) {
+            arr[i] = temp[i];
+        }
+
+    } else if (arr_size == 2) {
+        if (arr[0] <= arr[1]) {
+            return;
+        } else {
+            int t = arr[0];
+            arr[0] = arr[1];
+            arr[1] = t;
+            return;
+        }
+    } else {
+        return;
+    }
+}
+
+
 void paint_oled(void *arg) {
     /* SPI OLED + GPIO Button Initialization {{{ */
 	/* 1. Configure the spi master bus */
@@ -184,11 +236,19 @@ void get_input(void *arg) {
     double vert_val = 0;
 
     /* Potentiometer Initialization {{{ */
-    int pot_sample_per_tick = 3;
-    int pot_prev_tick_samples_saved = 20;
-    int pot_num_saved_values = pot_sample_per_tick * pot_prev_tick_samples_saved;
-    int pot_h_adc_values[pot_num_saved_values];
-    int pot_v_adc_values[pot_num_saved_values];
+    int pot_sample_per_tick = 20;
+    int pot_prev_tick_samples_saved = 5;
+    int pot_prev_tick_index = 0;
+    int pot_h_prev_tick[pot_prev_tick_samples_saved];
+    int pot_v_prev_tick[pot_prev_tick_samples_saved];
+    int pot_h_samples[pot_sample_per_tick];
+    int pot_v_samples[pot_sample_per_tick];
+
+    /* Zero out the previous tick arrays */
+    for (int i = 0; i < pot_prev_tick_samples_saved; i++) {
+        pot_h_prev_tick[i] = 0;
+        pot_v_prev_tick[i] = 0;
+    }
 
     /* 1. Configure the ADC unit. The ESP32 has 2 ADC units, and each
      * ADC-capable pin is assigned to one of the units. The 2 pins used in this
@@ -204,7 +264,7 @@ void get_input(void *arg) {
      * to configure both the horizontal and vertical potentiometers as they
      * will use the same bitwidth and attenuation */
     adc_oneshot_chan_cfg_t adc_chan_config = {
-        .bitwidth = ADC_BITWIDTH_DEFAULT,
+        .bitwidth = ADC_BITWIDTH_10,
         .atten = ADC_ATTEN_DB_12,
     };
     ESP_ERROR_CHECK(adc_oneshot_config_channel(adc1_handle, potentiometer_horiz_channel, &adc_chan_config));
@@ -215,53 +275,81 @@ void get_input(void *arg) {
         /* Update the lastWakeTime variable to have the current time */
         lastWakeTime = xTaskGetTickCount();
 
-        /* New tick, shift all stored values in the potentiometer value arrays
-         * back by as many spots as we sample per tick to make room for the
-         * samples of this tick */
-        for (int i = pot_num_saved_values - 1; i > pot_sample_per_tick - 1; i--) {
-            pot_h_adc_values[i] = pot_h_adc_values[i - pot_sample_per_tick];
-            pot_v_adc_values[i] = pot_v_adc_values[i - pot_sample_per_tick];
-        }
         /* Read a few ADC values from each potentiometer since the ADC unit is
          * quite unstable */
         for (int a = 0; a < pot_sample_per_tick; a++) {
             ESP_ERROR_CHECK(adc_oneshot_read(adc1_handle, \
-                potentiometer_horiz_channel, \
-                &pot_h_adc_values[a]));
+                potentiometer_horiz_channel, &pot_h_samples[a]));
 
             ESP_ERROR_CHECK(adc_oneshot_read(adc1_handle, \
-                potentiometer_vert_channel, \
-                &pot_v_adc_values[a]));
+                potentiometer_vert_channel, &pot_v_samples[a]));
         }
 
-        /* Average the horizontal and vertical potentiometer values
-         * over the most recent samples */
+        /* printf("h_samples unsorted: ["); */
+        /* for (int i = 0; i < pot_sample_per_tick; i++) { */
+        /*     printf("%d ", pot_h_samples[i]); */
+        /* } */
+        /* printf("] \n"); */
+        /* printf("v_samples unsorted: ["); */
+        /* for (int i = 0; i < pot_sample_per_tick; i++) { */
+        /*     printf("%d ", pot_v_samples[i]); */
+        /* } */
+        /* printf("] \n"); */
+
+        /* Sort the samples from this tick (so we can find the median) */
+        merge_sort(&pot_h_samples[0], pot_sample_per_tick);
+        merge_sort(&pot_v_samples[0], pot_sample_per_tick);
+
+        /* printf("h_samples sorted: ["); */
+        /* for (int i = 0; i < pot_sample_per_tick; i++) { */
+        /*     printf("%d ", pot_h_samples[i]); */
+        /* } */
+        /* printf("] \n"); */
+        /* printf("v_samples sorted: ["); */
+        /* for (int i = 0; i < pot_sample_per_tick; i++) { */
+        /*     printf("%d ", pot_v_samples[i]); */
+        /* } */
+        /* printf("] \n"); */
+
+        /* Save the median from the samples collected this tick in the saved
+         * medians array */
+        pot_h_prev_tick[pot_prev_tick_index] = pot_h_samples[pot_sample_per_tick / 2];
+        pot_v_prev_tick[pot_prev_tick_index] = pot_v_samples[pot_sample_per_tick / 2];
+        /* Increase the previous tick array index, resetting to 0 if we hit
+         * the end of the array */
+        pot_prev_tick_index++;
+        if (pot_prev_tick_index >= pot_prev_tick_samples_saved) {
+            pot_prev_tick_index = 0;
+        }
+
         horiz_val = 0;
         vert_val = 0;
 
-        for (int i = 0; i < pot_num_saved_values; i++) {
-            horiz_val += pot_h_adc_values[i];
-            vert_val += pot_v_adc_values[i];
+        /* Average the medians from this tick with the medians saved from
+         * previous ticks */
+        for (int i = 0; i < pot_prev_tick_samples_saved; i++) {
+            horiz_val += pot_h_prev_tick[i];
+            vert_val += pot_v_prev_tick[i];
         }
 
-        horiz_val /= pot_num_saved_values;
-        vert_val /= pot_num_saved_values;
+        horiz_val /= pot_prev_tick_samples_saved;
+        vert_val /= pot_prev_tick_samples_saved;
 
         if (xSemaphoreTake(input_semaphore, portMAX_DELAY) == pdTRUE) {
-            /* 32.2519 = 4096 / (128 - cursor_size). We want to scale the 0-4095 range
+            /* 1024 / (128 - cursor_size) = 8.062992126. We want to scale the 0-1023 range
              * we receive from the potentiometer to the range of pixels the
              * ball could occupy */
-            double temp_new_cursor_x = (horiz_val / (double) 32.2519685039);
-            double temp_new_cursor_y = (vert_val / (double) 32.2519685039);
+            double temp_new_cursor_x = (horiz_val / (double) 8.062992126);
+            double temp_new_cursor_y = (vert_val / (double) 8.062992126);
             /* Only change the cursor x or y if the new cursor x or y location
              * is more than 50% of a pixel into the next pixel. This is to help
              * with drawing straight lines */
-            /* if (fabs(temp_new_cursor_x - game_state.cursor_x + 0.5) > 0.5) { */
+            if (fabs(temp_new_cursor_x - game_state.cursor_x + 0.5) > 0.5) {
                 game_state.cursor_x = round(temp_new_cursor_x);
-            /* } */
-            /* if (fabs(temp_new_cursor_y - game_state.cursor_y + 0.5) > 0.5) { */
+            }
+            if (fabs(temp_new_cursor_y - game_state.cursor_y + 0.5) > 0.5) {
                 game_state.cursor_y = round(temp_new_cursor_y);
-            /* } */
+            }
 
             printf("new cursor (x, y) = (%d, %d)\n", game_state.cursor_x, game_state.cursor_y);
 
