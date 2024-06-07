@@ -71,42 +71,41 @@ perfectly horizontal or vertical lines. This is the expected behaviour when a
 user turns only one of the dials. With no noise filtering, the output from
 the ADC the potentiometers are connected to looks like this:
 
-<p align="center">
-  <video width="600" autoplay loop muted>
-    <source src="https://raw.githubusercontent.com/wiki/JSpeedie/ESP32-Etch-a-Sketch/videos/0-raw-adc.mov" type="video/mov" />
-    Your browser does not support the video tag.
-  </video>
-</p>
+https://github.com/JSpeedie/ESP32-Etch-a-Sketch/assets/11791739/db69f253-d8f8-4f31-abba-7b19f651e04a
 
-In the early stages of the project when the core functionality had just barely
-been achieved, turning only one of the horizontal or vertical dials resulted in
-chopping lines that would be decorated with little spikes where the program had
+Of course this is not acceptable for this project and so the noise had to be mitigated.
+The first thing I tried was a using the mean of a collection of samples each tick and
+combining that with Moving Average filter. Taking 3 samples per tick and using
+the last 20 ticks for our moving average, we get a result that looks like this:
+
+https://github.com/JSpeedie/ESP32-Etch-a-Sketch/assets/11791739/b3a43953-420c-43f7-b8eb-649d14180485
+
+It's much, much better, but turning only one of the horizontal or vertical dials results in
+choppy lines that would be decorated with little spikes or deviations where the program had
 one moment calculated that the cursor should be on the adjacent line, and the
-next calculated that the first line was correct. It seemed to me that the cause
-of this was noise from the ADC/potentiometers. My thought was that if values
-from the ADCs (representing the rotation of the potentiometer) are not
-accurately read, there might be a pixel or three of shake in the cursor.
-
-This led to my first attempt to solve the problem. If the signal is noisy,
-perhaps taking multiple samples per tick and then averaging them would produce
-a stable value. When implemented, this did reduce noise, but for the
-Etch-a-Sketch, even 1 pixel of shake in the cursor leads to noticeably choppy
-lines. Another solution would be needed.
+next calculated that the first line was correct. Noise from the ADC/potentiometers
+is still causing cursor shakiness so more needs to be done.
 
 My next attempt was to take the median from a collection of samples taken each
 tick. The thinking here was that outliers in the samples of a given tick are
 likely noise, and in averaging the samples we aren't ignoring noise but merely
 reducing its impact. An improvement would be to ignore the outlier
-values by taking not the mean of the samples, but their median. For good
-measure, I also kept the last 2 medians from previous ticks and averaged the
-median for the current tick with them in an attempt to reduce cursor shakiness
-further. Ultimately I did not find that this attempt was significantly better
-than just taking an average across a large sample size. Sorting the sample data
-taken on a tick is fairly expensive and this did not come with a compensatory
-reduction in the number of samples taken per tick - in fact I increased how
-many samples I took!
+values by taking not the mean of the samples, but their median. On top of
+this, I kept the Moving Average filter, but changed in to be 5-point instead
+of 20-point. This results in cursor movement looking like this:
 
-My final attempt took the view that it was not necessarily noise that was
+https://github.com/JSpeedie/ESP32-Etch-a-Sketch/assets/11791739/7c6bf2ee-3b1b-474a-a1b1-549f72d5b65c
+
+Moving in the right direction! This was much closer to a 1 pixel wide vertical or
+horizontal line than the previous method, but it's still not where we want it.
+Further complicating things, while there are less points in the moving average
+calculation, the code I used here took 20 samples per tick (up from 3). So while
+the result was less cursor shakiness, it comes at the cost of significantly
+more samples and sorting the data so the median can be found. With so much
+sampling and calculating going on in this potential solution, I decided
+that whatever I tried next would have to be something beyond sampling or averaging.
+
+My final attempt came from the perspective that it was not necessarily noise that was
 causing cursor shakiness, but rather the game design I had used thus far. My
 thought was that no matter how much we reduce noise, there will always be
 hypersensitive, borderline positions for the potentiometers where if they
@@ -154,13 +153,26 @@ was worth committing used the function:
 \frac{1}{{-(x-0.25)}^{4}-1}+1
 ```
 
-What I have committed at the time of writing is:
+Which produced cursor movement that looked like this:
+
+https://github.com/JSpeedie/ESP32-Etch-a-Sketch/assets/11791739/5c1ace87-be00-4200-8bcc-acacf11ce73b
+
+The certainty factor function I use at the time of writing is this:
 
 ```math
 \frac{2}{{-(x-0.25)}^{4}-2}+1$
 ```
 
-Here's how they compare:
+And it produces cursor movement that looks like this:
+
+https://github.com/JSpeedie/ESP32-Etch-a-Sketch/assets/11791739/f6ffbc3a-4225-4dca-be5c-46276bd17728
+
+You can see the cursor shakiness has been entirely eliminated. Essentially
+this function has the effect of de-sensitizing user input when the movement
+is delicate while having almost no effect when user input is more substantial.
+And it works quite well!
+
+For completeness, here's how my first 2 attempts at the certainy factor function compare:
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/wiki/JSpeedie/ESP32-Etch-a-Sketch/images/certainty_factor_first_attempt_v_second_attempt.png" width="80%"/>
