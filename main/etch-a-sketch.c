@@ -20,10 +20,10 @@
 
 /* Potentiometer Defines {{{ */
 /* Going off  https://learn.adafruit.com/assets/111179 */
+/* This is for GPIO pin 33 */
+static const adc_channel_t potentiometer_horiz_channel = ADC_CHANNEL_5;
 /* This is for GPIO pin 39 */
-static const adc_channel_t potentiometer_horiz_channel = ADC_CHANNEL_3;
-/* This is for GPIO pin 36 */
-static const adc_channel_t potentiometer_vert_channel = ADC_CHANNEL_0;
+static const adc_channel_t potentiometer_vert_channel = ADC_CHANNEL_3;
 /* }}} */
 
 /* GPIO Defines {{{ */
@@ -36,7 +36,7 @@ static const adc_channel_t potentiometer_vert_channel = ADC_CHANNEL_0;
 #define SPI_MOSI_PIN_NUM 18
 /* #define SPI_MISO_PIN_NUM 19 */ // Not used for the OLED
 #define SPI_SCK_PIN_NUM  14
-#define SPI_CS_PIN_NUM   15
+#define SPI_CS_PIN_NUM   32
 #define DC_PIN_NUM   26
 #define RST_PIN_NUM  25
 
@@ -132,6 +132,25 @@ void merge_sort(int *arr, int arr_size) {
     } else {
         return;
     }
+}
+
+
+double standard_deviation(int *arr, int arr_size) {
+
+    /* Calculate the mean */
+    double mean = 0;
+    for (int i = 0; i < arr_size; i++) {
+        mean += arr[i];
+    }
+    mean /= (double) arr_size;
+
+    double sd = 0;
+    for (int i = 0; i < arr_size; i++) {
+        sd += fabs(((double) arr[i]) - mean);
+    }
+    sd /= (double) arr_size;
+
+    return sd;
 }
 
 
@@ -312,7 +331,7 @@ void get_input(void *arg) {
      * program are both on ADC unit 1 */
     adc_oneshot_unit_handle_t adc1_handle;
     adc_oneshot_unit_init_cfg_t adc_unit_cfg = {
-        .unit_id = ADC_UNIT_1,  /* Pins 39 and 36 use ADC1, channels 3 and 0 */
+        .unit_id = ADC_UNIT_1,  /* Pins 33 and 39 use ADC1, channels 5 and 3 */
         .ulp_mode = ADC_ULP_MODE_DISABLE, /* Do not use Ultra Low Power mode */
     };
     ESP_ERROR_CHECK(adc_oneshot_new_unit(&adc_unit_cfg, &adc1_handle));
@@ -345,6 +364,10 @@ void get_input(void *arg) {
         /* Sort the samples from this tick (so we can find the median) */
         merge_sort(&pot_h_samples[0], pot_sample_per_tick);
         merge_sort(&pot_v_samples[0], pot_sample_per_tick);
+
+        /* double h_sd = standard_deviation(&pot_h_samples[0], pot_sample_per_tick); */
+        /* double v_sd = standard_deviation(&pot_v_samples[0], pot_sample_per_tick); */
+        /* printf("%g, %g\n", h_sd, v_sd); */
 
         /* Take a mean of several values around the median from the samples
          * collected this tick (call this the mean-median) and save it in the
