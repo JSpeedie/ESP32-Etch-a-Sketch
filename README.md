@@ -66,49 +66,53 @@ and to give it power.
 
 ### Straight Lines
 
-The most challenging part of this project was getting the device to draw a
+The most challenging part of this project was getting the device to draw
 perfectly horizontal or vertical lines. This is the expected behaviour when a
 user turns only one of the dials. With no noise filtering, the output from
 the ADC the potentiometers are connected to looks like this:
 
 https://github.com/JSpeedie/ESP32-Etch-a-Sketch/assets/11791739/db69f253-d8f8-4f31-abba-7b19f651e04a
 
-Of course this is not acceptable for this project and so the noise had to be mitigated.
-The first thing I tried was a using the mean of a collection of samples each tick and
-combining that with Moving Average filter. Taking 3 samples per tick and using
-the last 20 ticks for our moving average, we get a result that looks like this:
+Of course this isn't acceptable for this project, and I had to mitigate the
+noise in some way. The first thing I tried was using the mean of a collection
+of samples taken each tick and combining that with a Moving Average filter.
+Taking 3 samples per tick and using the means from the last 20 ticks for our
+moving average, we get a result that looks like this:
 
 https://github.com/JSpeedie/ESP32-Etch-a-Sketch/assets/11791739/b3a43953-420c-43f7-b8eb-649d14180485
 
-It's much, much better, but turning only one of the horizontal or vertical dials results in
-choppy lines that would be decorated with little spikes or deviations where the program had
-one moment calculated that the cursor should be on the adjacent line, and the
-next calculated that the first line was correct. Noise from the ADC/potentiometers
-is still causing cursor shakiness so more needs to be done.
+It's much, much better, but turning only one of the horizontal or vertical
+dials results in choppy lines that are decorated with little spikes or
+deviations where the program had one moment calculated that the cursor should
+be on the adjacent line, and the next calculated that the first line was
+correct. Noise from the ADC/potentiometers is still causing cursor shakiness so
+more needs to be done.
 
 My next attempt was to take the median from a collection of samples taken each
 tick. The thinking here was that outliers in the samples of a given tick are
 likely noise, and in averaging the samples we aren't ignoring noise but merely
-reducing its impact. An improvement would be to ignore the outlier
-values by taking not the mean of the samples, but their median. On top of
-this, I kept the Moving Average filter, but changed in to be 5-point instead
-of 20-point. This results in cursor movement looking like this:
+reducing its impact. An improvement would be to ignore the outlier values by
+taking not the mean of the samples, but their median. This led me to change the
+code to take the median rather than the mean and to put that through a 5-point
+Moving Average filter (down from 20-point). This results in cursor movement
+looking like this:
 
 https://github.com/JSpeedie/ESP32-Etch-a-Sketch/assets/11791739/7c6bf2ee-3b1b-474a-a1b1-549f72d5b65c
 
-Moving in the right direction! This was much closer to a 1 pixel wide vertical or
-horizontal line than the previous method, but it's still not where we want it.
-Further complicating things, while there are less points in the moving average
-calculation, the code I used here took 20 samples per tick (up from 3). So while
-the result was less cursor shakiness, it comes at the cost of significantly
-more samples and sorting the data so the median can be found. With so much
-sampling and calculating going on in this potential solution, I decided
-that whatever I tried next would have to be something beyond sampling or averaging.
+Moving in the right direction! This was much closer to a 1 pixel wide vertical
+or horizontal line than the previous method, but it's still not where we want
+it. Further complicating things, while there are less points in the moving
+average calculation, the code I used here took 20 samples per tick (up from 3).
+So while the result was less cursor shakiness, it comes at the cost of both
+significantly more samples as well as sorting the data so the median can be
+found. With so much sampling and calculating going on in this potential
+solution, I decided that whatever I tried next would have to be something
+beyond increasing the sampling or averaging.
 
-My final attempt came from the perspective that it was not necessarily noise that was
-causing cursor shakiness, but rather the game design I had used thus far. My
-thought was that no matter how much we reduce noise, there will always be
-hypersensitive, borderline positions for the potentiometers where if they
+My final attempt came from the perspective that it was not necessarily noise
+that was causing cursor shakiness, but rather the game design I had used thus
+far. My thought was that no matter how much we reduce noise, there will always
+be hypersensitive, borderline positions for the potentiometers where if they
 rotate a tiny, tiny degree, the value will cross a threshold and the game will
 (correctly) move the cursor. For example, if, hypothetically, the "true" (i.e.
 noise free) value of our potentiometer at a given moment translates to the in
@@ -120,15 +124,27 @@ the cursor to position 42 - an effect noise could easily have on the mean and
 median calculations. Since we cannot remove noise entirely, what this means is
 that there will always be positions where noise is more likely to introduce
 shakiness. The conclusion I drew from this is that we need to implement some
-sort of input smoothing code that takes these hypersensitive cases into
-account. The solution I thought of is to calculate the cursor's new position
-each tick not by mapping the potentiometers' positions to screen coordinates,
-but rather by taking the calculated current position for the cursor,
-subtracting the previous cursor's position (represented as the cursor's
+code that takes these hypersensitive cases into account.
+
+First, the cursor's position - which is stored as an integer, a pixel position
+on the screen - should be represented as its integer representation cast to a
+double with 0.5 added to it. This way when the ADC produces a double
+representing what it thinks should be the cursor's next x or y position, we can
+compare it to what is more essentially the cursor's x or y position: a double
+that represents the cursor as being in the middle of the pixel it is in! This
+immediately has the effect of reducing the impact of noise by eliminating
+those hypersensitive, borderline cases.
+
+Treating the cursor's position as its integer value cast to a double with 0.5
+added to it allows for another method of combatting noise, however. First,
+let's change how the game updates the cursor's position by calculating the
+cursor's new position not by mapping the potentiometers' positions to screen
+coordinates, but rather by taking the calculated current position for the
+cursor, subtracting the previous cursor's position (represented as the cursor's
 previous position as an integer pair, cast to doubles, with 0.5 added to each)
-and adding that to cursor's previous position. On its own, this only
-complicates a simple calculation, however, it makes room for the real solution:
-a certainty factor function.
+and adding that to cursor's previous position. This seems to only complicate a
+simple calculation, but really what it is doing is making room for the real
+solution: a certainty factor function.
 
 The certainty factor function is the piece of the puzzle that puts this problem
 to bed. Essentially, when the game calculates that the new position for the
@@ -167,10 +183,19 @@ And it produces cursor movement that looks like this:
 
 https://github.com/JSpeedie/ESP32-Etch-a-Sketch/assets/11791739/f6ffbc3a-4225-4dca-be5c-46276bd17728
 
-You can see the cursor shakiness has been entirely eliminated. Essentially
-this function has the effect of de-sensitizing user input when the movement
-is delicate while having almost no effect when user input is more substantial.
-And it works quite well!
+You can see the cursor shakiness has been entirely eliminated. Essentially this
+function has the effect of giving the row or column the cursor is currently on
+a sort of weak gravity, or stickiness. Small x or y changes are effectively
+shrunk, and this increases the chance that the x or y change will be small
+enough that rounding it will return 0. On the other hand, past a certain
+magnitude, a given x or y change will be basically unaltered, losing that
+gravity/stickiness.
+
+With all that said, I've found that the certainty factor function makes a huge
+difference! If I had more time I'd love to look into other filters, but for
+now, I'm very happy with how reliably the user can draw straight lines.
+
+### Certainty Factor Function Comparisons
 
 For completeness, here's how my first 2 attempts at the certainy factor function compare:
 
