@@ -78,7 +78,8 @@ double fast_sigmoid2(double x) {
  * This function is used to handle noise in input, returning a factor
  * that would shrink a change if the change is small. */
 double certainty_factor(double x) {
-    return (2 / (-pow(x-0.25, 4) - 2)) + 1;
+    /* return (1 / (-pow(fabs(x)-0.25, 4) - 1)) + 1; // 1st Attempt */
+    return (2 / (-pow(fabs(x)-0.25, 4) - 2)) + 1; // 2nd Attempt
 }
 
 
@@ -227,7 +228,7 @@ void paint_oled(void *arg) {
          * location and the current cursor location */
         int dx = cursor_x - prev_cursor_x;
         int dy = cursor_y - prev_cursor_y;
-        /* a^2 + b^2 = c^2 */
+        /* a^2 + b^2 = c^2 -> c = sqrt(a^2 + b^2) */
         int line_length = sqrt((dx * dx) + (dy * dy));
 
         int spot_x = prev_cursor_x;
@@ -291,15 +292,16 @@ void get_input(void *arg) {
     double vert_val = 0;
 
     /* Potentiometer Initialization {{{ */
-    int pot_sample_per_tick = 25;
-    int pot_prev_tick_samples_saved = 3;
+    int pot_sample_per_tick = 35;
+    int pot_prev_tick_samples_saved = 3; /* I.e. the number of points in our Moving Average Filter */
     int pot_prev_tick_index = 0;
-    int pot_h_prev_tick[pot_prev_tick_samples_saved];
-    int pot_v_prev_tick[pot_prev_tick_samples_saved];
+    double pot_h_prev_tick[pot_prev_tick_samples_saved];
+    double pot_v_prev_tick[pot_prev_tick_samples_saved];
     int pot_h_samples[pot_sample_per_tick];
     int pot_v_samples[pot_sample_per_tick];
 
-    /* Zero out the previous tick arrays */
+    /* Zero out the previous tick array before we get to the loop
+     * so the array isn't initialized with garbage data */
     for (int i = 0; i < pot_prev_tick_samples_saved; i++) {
         pot_h_prev_tick[i] = 0;
         pot_v_prev_tick[i] = 0;
@@ -344,10 +346,21 @@ void get_input(void *arg) {
         merge_sort(&pot_h_samples[0], pot_sample_per_tick);
         merge_sort(&pot_v_samples[0], pot_sample_per_tick);
 
-        /* Save the median from the samples collected this tick in the saved
-         * medians array */
-        pot_h_prev_tick[pot_prev_tick_index] = pot_h_samples[pot_sample_per_tick / 2];
-        pot_v_prev_tick[pot_prev_tick_index] = pot_v_samples[pot_sample_per_tick / 2];
+        /* Take a mean of several values around the median from the samples
+         * collected this tick (call this the mean-median) and save it in the
+         * saved mean-medians array */
+        int values_around_median = 3;
+        pot_h_prev_tick[pot_prev_tick_index] = 0;
+        pot_v_prev_tick[pot_prev_tick_index] = 0;
+
+        for (int i = 0; i < values_around_median; i++) {
+            pot_h_prev_tick[pot_prev_tick_index] += pot_h_samples[(pot_sample_per_tick / 2) - (values_around_median / 2) + i];
+            pot_v_prev_tick[pot_prev_tick_index] += pot_v_samples[(pot_sample_per_tick / 2) - (values_around_median / 2) + i];
+        }
+
+        pot_h_prev_tick[pot_prev_tick_index] /= (double) values_around_median;
+        pot_v_prev_tick[pot_prev_tick_index] /= (double) values_around_median;
+
         /* Increase the previous tick array index, resetting to 0 if we hit
          * the end of the array */
         pot_prev_tick_index++;
@@ -358,22 +371,24 @@ void get_input(void *arg) {
         horiz_val = 0;
         vert_val = 0;
 
-        /* Average the medians from this tick with the medians saved from
-         * previous ticks */
+        /* Average the mean-median from this tick with the mean-medians saved
+         * from previous ticks */
         for (int i = 0; i < pot_prev_tick_samples_saved; i++) {
             horiz_val += pot_h_prev_tick[i];
             vert_val += pot_v_prev_tick[i];
         }
 
-        horiz_val /= pot_prev_tick_samples_saved;
-        vert_val /= pot_prev_tick_samples_saved;
+        horiz_val /= (double) pot_prev_tick_samples_saved;
+        vert_val /= (double) pot_prev_tick_samples_saved;
 
         if (xSemaphoreTake(input_semaphore, portMAX_DELAY) == pdTRUE) {
-            /* 1024 / (128 - cursor_size) = 8.062992126. We want to scale the 0-1023 range
-             * we receive from the potentiometer to the range of pixels the
-             * ball could occupy */
-            double temp_new_cursor_x = (horiz_val / (double) 8.062992126);
-            double temp_new_cursor_y = (vert_val / (double) 8.062992126);
+            /* 1024 / (128 - cursor_size) because we use a 10 bit ADC (2^10 =
+             * 1024 distinct values) and we want to scale the 0-1023 range we
+             * receive from the potentiometer to the range of pixels the ball
+             * could occupy */
+            double adc_to_screen_scale = 1024 / (128 - cursor_size);
+            double temp_new_cursor_x = (horiz_val / adc_to_screen_scale);
+            double temp_new_cursor_y = (vert_val / adc_to_screen_scale);
 
             /* Put the input through one final anti-noise filter. Here we use a
              * custom made function to impart a smaller change on the cursor's
@@ -417,6 +432,9 @@ void get_input(void *arg) {
 
 
 void app_main(void) {
+
+    printf("Etch-a-Sketch application is starting!\n");
+
     /* Create the variables that will be shared between
      * the paint_oled and the get_input tasks */
     cursor_size = 1;
