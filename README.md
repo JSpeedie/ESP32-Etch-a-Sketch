@@ -68,15 +68,24 @@ and to give it power.
 
 The most challenging part of this project was getting the device to draw a
 perfectly horizontal or vertical lines. This is the expected behaviour when a
-user turns only one of the dials. In the early stages of the project when the
-core functionality had just barely been achieved, turning only one of the
-horizontal or vertical dials resulted in chopping lines that would be decorated
-with little spikes where the program had one moment calculated that the cursor
-should be on the adjacent line, and the next calculated that the first line was
-correct. It seemed to me that the cause of this was noise from the
-ADC/potentiometers. My thought was that if values from the ADCs (representing
-the rotation of the potentiometer) are not accurately read, there might be a
-pixel or three of shake in the cursor.
+user turns only one of the dials. With no noise filtering, the output from
+the ADC the potentiometers are connected to looks like this:
+
+<p align="center">
+  <video width="600" autoplay loop muted>
+    <source src="https://raw.githubusercontent.com/wiki/JSpeedie/ESP32-Etch-a-Sketch/videos/0-raw-adc.mov" type="video/mov" />
+    Your browser does not support the video tag.
+  </video>
+</p>
+
+In the early stages of the project when the core functionality had just barely
+been achieved, turning only one of the horizontal or vertical dials resulted in
+chopping lines that would be decorated with little spikes where the program had
+one moment calculated that the cursor should be on the adjacent line, and the
+next calculated that the first line was correct. It seemed to me that the cause
+of this was noise from the ADC/potentiometers. My thought was that if values
+from the ADCs (representing the rotation of the potentiometer) are not
+accurately read, there might be a pixel or three of shake in the cursor.
 
 This led to my first attempt to solve the problem. If the signal is noisy,
 perhaps taking multiple samples per tick and then averaging them would produce
