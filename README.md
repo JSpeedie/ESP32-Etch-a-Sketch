@@ -223,5 +223,31 @@ coordinate was pre-filter.
 
 ### Drawing the Lines
 
-tbd.  a^2 + b^2 = c^2, we want to draw a trail to avoid leaving gaps when the user
-moves the potentiometer quickly.
+Another problem that had to be addressed if the project was to be acceptably
+complete was that moving the cursor quickly should not leave gaps in the line
+traced by the cursor's movement. One way this can be remedied is simply by
+increasing the ESP32's tick rate and polling more frequently. This is a poor
+solution because you give the tasks less time to complete and you increase
+the power consumption of the device.
+
+The solution I implemented is to draw a straight line (or trail) between the
+cursor's new position and the cursor's previous position. First I used
+the Pythagorean theorem to calculate the length of a straight line between
+the two positions and then I used a loop to paint the trail. The loop iterated once for each
+unit of length of the line, each iteration incrementing the x and y point where the game
+would paint a pixel by the change in x or y divided by the length of the line.
+
+There are two problems with this solution, the first being that it only paints
+a straight line, and it is entirely possible that the user actually moved the
+cursor along a non-linear curve between the two points. The effect of this
+problem is minimized by the fact that even at a relatively low tick speed, the
+ESP32 updates the cursor's position so fast that any difference between the
+cursor's previous position and its current position are so minor that
+approximating it as a straight line leads to little to no discrepancy between
+what appears on screen and what the user would expect. The second problem
+is that the way in which this solution paints the line can lead to "steppy" lines.
+Non-cardinal lines always requires some special handling on screens to ensure
+that they look no thinner or wider than a perfectly straight line along
+the horizontal and vertical axes. Since this is a simple and short project, I
+chose not to pursue a proper solution to this problem at this time, and the result
+is that some of the diagonal lines look thick and "steppy".
