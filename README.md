@@ -1,5 +1,7 @@
 # ESP32 Etch-a-Sketch
 
+https://github.com/JSpeedie/ESP32-Etch-a-Sketch/assets/11791739/9b4392fa-0ebb-4d07-ba5f-08a906804ac6
+
 ## Technical Description
 
 This project recreates the functionality of the iconic Etch-a-Sketch toy using
