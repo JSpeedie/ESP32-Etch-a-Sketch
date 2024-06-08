@@ -3,7 +3,7 @@
 ## Technical Description
 
 This project recreates the functionality of the iconic Etch-a-Sketch toy using
-electronic components. In particular, this project is comprised of the following:
+electronic components. In particular, this project is comprised of the following
 components:
 
 * An ESP32 microcontroller running a multitasking, synchronized FreeRTOS application.
@@ -146,27 +146,27 @@ and adding that to cursor's previous position. This seems to only complicate a
 simple calculation, but really what it is doing is making room for the real
 solution: a certainty factor function.
 
-The certainty factor function is the piece of the puzzle that puts this problem
-to bed. Essentially, when the game calculates that the new position for the
-cursor is a small distance away from the cursor's previous position (e.g.
-(83.23, 89.30) -> (83.31, 89.28) ), then we are less certain that that was
-indeed a deliberate change in input from the user. Small changes to the cursor
-position have a greater likelihood of being the result of noise, or largely
-skewed by noise. My thought here was that we need a function that maps changes
-in the cursor x or y to what could be compared to a probability. Specifically,
-we need small changes to result in very low certainties (close to 0), and large
-changes to map very close to 1. The idea then is to multiply the calculated
-change in x and y for the cursor by the certainty factor so that small changes
-become smaller, and less likely to move the cursor to any adjacent pixel. At
-first I thought that it sounded like a slightly modified Sigmoid function would
-do the job, but the ramp from squishing values (the function returning
-something like 0.001) to approximating values (the function returning something
-like 0.999) was not steep enough. I ended up designing an purpose-built
-function based off of the asymptotic function $1/x$. The first attempt I felt
-was worth committing used the function:
+The certainty factor function goes a long way in reducing the cursor shakiness.
+Essentially, when the game calculates that the new position for the cursor is a
+small distance away from the cursor's previous position (e.g. (83.23, 89.30) ->
+(83.31, 89.28) ), then we are less certain that that was indeed a deliberate
+change in input from the user. Small changes to the cursor position have a
+greater likelihood of being the result of noise, or largely skewed by noise. My
+thought here was that we need a function that maps changes in the cursor x or y
+to what could be compared to a probability. Specifically, we need small changes
+to result in very low certainties (close to 0), and large changes to map very
+close to 1. The idea then is to multiply the calculated change in x and y for
+the cursor by the certainty factor so that small changes become smaller, and
+less likely to move the cursor to any adjacent pixel. At first I thought that
+it sounded like a slightly modified Sigmoid function would do the job, but the
+ramp from squishing values (the function returning something like 0.001) to
+approximating values (the function returning something like 0.999) was not
+steep enough. I ended up designing an purpose-built function based off of the
+asymptotic function $1/x$. The first attempt I felt was worth committing used
+the function:
 
 ```math
-\frac{1}{{-(x-0.25)}^{4}-1}+1
+\frac{1}{{-(|x|-0.25)}^{4}-1}+1
 ```
 
 Which produced cursor movement that looked like this:
@@ -176,20 +176,34 @@ https://github.com/JSpeedie/ESP32-Etch-a-Sketch/assets/11791739/5c1ace87-be00-42
 The certainty factor function I use at the time of writing is this:
 
 ```math
-\frac{2}{{-(x-0.25)}^{4}-2}+1$
+\frac{2}{{-(|x|-0.25)}^{4}-2}+1$
 ```
 
 And it produces cursor movement that looks like this:
 
 https://github.com/JSpeedie/ESP32-Etch-a-Sketch/assets/11791739/f6ffbc3a-4225-4dca-be5c-46276bd17728
 
-You can see the cursor shakiness has been entirely eliminated. Essentially this
-function has the effect of giving the row or column the cursor is currently on
-a sort of weak gravity, or stickiness. Small x or y changes are effectively
-shrunk, and this increases the chance that the x or y change will be small
-enough that rounding it will return 0. On the other hand, past a certain
-magnitude, a given x or y change will be basically unaltered, losing that
-gravity/stickiness.
+You can see the cursor shakiness has been almost entirely eliminated.
+Essentially this function has the effect of giving the row or column the cursor
+is currently on a sort of weak gravity, or stickiness. Small x or y changes are
+effectively shrunk, and this increases the chance that the x or y change will
+be small enough that rounding it will return 0. On the other hand, past a
+certain magnitude, a given x or y change will be basically unaltered, losing
+that gravity/stickiness.
+
+Other changes I've made since adding the certainty factor function is to take a
+narrow (e.g. 3 point) mean around the median in case there are 2 dominant
+values near the median. In testing I found this produce less shakiness than
+simply taking the median.
+
+I also tried a variety of potential hardware solutions to the noise by using
+capacitors. Almost all of these tended to increase noise rather than reduce it.
+I can't explain why this was the case as the ESP32 page on ADC recommends using
+a capacitor right at the ADC pin you're using to reduce noise, but when
+I tried that the noise was more volatile I found. Sometimes across 1000 samples
+there would be less standard deviation for the ADC that had a capacitor attached,
+but most of the time the standard deviation would double or triple! Something
+to look into another time.
 
 With all that said, I've found that the certainty factor function makes a huge
 difference! If I had more time I'd love to look into other filters, but for
