@@ -219,13 +219,7 @@ For completeness, here's how my first 2 attempts at the certainy factor function
   <img src="https://raw.githubusercontent.com/wiki/JSpeedie/ESP32-Etch-a-Sketch/images/certainty_factor_first_attempt_v_second_attempt.png" width="80%"/>
 </p>
 
-I also considered a more aggressive version of my second attempt shown in orange here:
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/wiki/JSpeedie/ESP32-Etch-a-Sketch/images/certainty_factor_first_attempt_v_second_attempt_v_possible_third.png" width="80%"/>
-</p>
-
-Finally, here's a graph showing how my first attempt and second attempt
+And here's a graph showing how my first attempt and second attempt
 certainty factor functions affect a given change in x/y position. The y axis of
 the dotted line represents the filtered x or y coordinate the cursor will end
 up experiencing, while the x axis represents the what that change in x or y
