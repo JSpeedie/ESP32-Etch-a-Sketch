@@ -49,6 +49,11 @@ cd projects/etch-a-sketch
 idf.py -p /dev/ttyUSB0 flash monitor
 ```
 
+Note that this will compile and flash the C++ version of the application.
+If you want to run the C code (also contained in this repo), you will
+need to adjust `main/CMakeLists.txt` to use the `.c` file in its source
+list instead of the `.cpp` file.
+
 ### Hardware connections
 
 Below is the schematic I used for the example program.
