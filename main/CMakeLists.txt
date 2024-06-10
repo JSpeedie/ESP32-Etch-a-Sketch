@@ -1,4 +1,4 @@
-set(srcs "etch-a-sketch.c")
+set(srcs "etch-a-sketch.cpp")
 
 idf_component_register(SRCS "${srcs}"
                     REQUIRES driver

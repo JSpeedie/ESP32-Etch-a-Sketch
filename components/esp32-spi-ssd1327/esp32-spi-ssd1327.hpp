@@ -1,9 +1,10 @@
-#ifndef __ESP32_SPI_SSD1327_H_
-#define __ESP32_SPI_SSD1327_H_
+#ifndef __ESP32_SPI_SSD1327_HPP_
+#define __ESP32_SPI_SSD1327_HPP_
 
 #include <inttypes.h>
 
 #include "driver/spi_master.h"
+#include "driver/gpio.h"
 
 
 struct spi_ssd1327 {
