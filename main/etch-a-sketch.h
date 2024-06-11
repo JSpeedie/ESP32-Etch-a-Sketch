@@ -1,11 +1,7 @@
-#ifndef __ETCH_A_SKETCH_
-#define __ETCH_A_SKETCH_
+#ifndef __ETCH_A_SKETCH_H_
+#define __ETCH_A_SKETCH_H_
 
 #include <inttypes.h>
-
-#include "freertos/semphr.h"
-
-#include "esp32-spi-ssd1327.h"
 
 
 struct game_state {

@@ -3,6 +3,9 @@
 #include <string.h>
 #include <inttypes.h>
 
+#include <array>
+#include <algorithm>
+
 #include "driver/gpio.h"
 #include "driver/spi_master.h"
 #include "esp_adc/adc_oneshot.h"
@@ -12,10 +15,10 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 
-#include "etch-a-sketch.h"
+#include "etch-a-sketch.hpp"
 
 /* Component includes */
-#include "esp32-spi-ssd1327.h"
+#include "esp32-spi-ssd1327.hpp"
 
 
 /* Potentiometer Defines {{{ */
@@ -303,19 +306,19 @@ void get_input(void *arg) {
     double vert_val = 0;
 
     /* Potentiometer Initialization {{{ */
-    int pot_sample_per_tick = 35;
-    int pot_prev_tick_samples_saved = 3; /* I.e. the number of points in our Moving Average Filter */
+    const int pot_sample_per_tick = 35;
+    const int pot_prev_tick_samples_saved = 3; /* I.e. the number of points in our Moving Average Filter */
     int pot_prev_tick_index = 0;
-    double pot_h_prev_tick[pot_prev_tick_samples_saved];
-    double pot_v_prev_tick[pot_prev_tick_samples_saved];
-    int pot_h_samples[pot_sample_per_tick];
-    int pot_v_samples[pot_sample_per_tick];
+    std::array<double, pot_prev_tick_samples_saved> pot_h_prev_tick;
+    std::array<double, pot_prev_tick_samples_saved> pot_v_prev_tick;
+    std::array<int, pot_sample_per_tick> pot_h_samples;
+    std::array<int, pot_sample_per_tick> pot_v_samples;
 
     /* Zero out the previous tick array before we get to the loop
      * so the array isn't initialized with garbage data */
     for (int i = 0; i < pot_prev_tick_samples_saved; i++) {
-        pot_h_prev_tick[i] = 0;
-        pot_v_prev_tick[i] = 0;
+        pot_h_prev_tick.at(i) = 0;
+        pot_v_prev_tick.at(i) = 0;
     }
 
     /* 1. Configure the ADC unit. The ESP32 has 2 ADC units, and each
@@ -349,34 +352,38 @@ void get_input(void *arg) {
          * quite unstable */
         for (int a = 0; a < pot_sample_per_tick; a++) {
             ESP_ERROR_CHECK(adc_oneshot_read(adc1_handle, \
-                POTENTIOMETER_HORIZ_CHANNEL, &pot_h_samples[a]));
+                POTENTIOMETER_HORIZ_CHANNEL, &pot_h_samples.at(a)));
 
             ESP_ERROR_CHECK(adc_oneshot_read(adc1_handle, \
-                POTENTIOMETER_VERT_CHANNEL, &pot_v_samples[a]));
+                POTENTIOMETER_VERT_CHANNEL, &pot_v_samples.at(a)));
         }
 
         /* Sort the samples from this tick (so we can find the median) */
-        merge_sort(&pot_h_samples[0], pot_sample_per_tick);
-        merge_sort(&pot_v_samples[0], pot_sample_per_tick);
+        std::sort(std::begin(pot_h_samples), std::end(pot_h_samples));
+        std::sort(std::begin(pot_v_samples), std::end(pot_v_samples));
 
         /* double h_sd = standard_deviation(&pot_h_samples[0], pot_sample_per_tick); */
         /* double v_sd = standard_deviation(&pot_v_samples[0], pot_sample_per_tick); */
         /* printf("%g, %g\n", h_sd, v_sd); */
 
-        /* Take a mean of several values around the median from the samples
+        /* MM1-2: Take a mean of several values around the median from the samples
          * collected this tick (call this the mean-median) and save it in the
          * saved mean-medians array */
         int values_around_median = 3;
-        pot_h_prev_tick[pot_prev_tick_index] = 0;
-        pot_v_prev_tick[pot_prev_tick_index] = 0;
+        pot_h_prev_tick.at(pot_prev_tick_index) = 0;
+        pot_v_prev_tick.at(pot_prev_tick_index) = 0;
 
+        /* MM1: Sum the set number of values around the median */
         for (int i = 0; i < values_around_median; i++) {
-            pot_h_prev_tick[pot_prev_tick_index] += pot_h_samples[(pot_sample_per_tick / 2) - (values_around_median / 2) + i];
-            pot_v_prev_tick[pot_prev_tick_index] += pot_v_samples[(pot_sample_per_tick / 2) - (values_around_median / 2) + i];
+            pot_h_prev_tick.at(pot_prev_tick_index) += \
+                pot_h_samples.at((pot_sample_per_tick / 2) - (values_around_median / 2) + i);
+            pot_v_prev_tick.at(pot_prev_tick_index) += \
+                pot_v_samples.at((pot_sample_per_tick / 2) - (values_around_median / 2) + i);
         }
 
-        pot_h_prev_tick[pot_prev_tick_index] /= (double) values_around_median;
-        pot_v_prev_tick[pot_prev_tick_index] /= (double) values_around_median;
+        /* MM2: Find the mean of the values around the median */
+        pot_h_prev_tick.at(pot_prev_tick_index) /= (double) values_around_median;
+        pot_v_prev_tick.at(pot_prev_tick_index) /= (double) values_around_median;
 
         /* Increase the previous tick array index, resetting to 0 if we hit
          * the end of the array */
@@ -385,16 +392,19 @@ void get_input(void *arg) {
             pot_prev_tick_index = 0;
         }
 
+        /* MA1-2: Calculate the Moving Average by averaging the mean-median
+         * from this tick with the mean-medians saved from previous ticks */
         horiz_val = 0;
         vert_val = 0;
 
-        /* Average the mean-median from this tick with the mean-medians saved
-         * from previous ticks */
+        /* MA1: Sum the values from previous ticks, including the mean-median
+         * from this tick */
         for (int i = 0; i < pot_prev_tick_samples_saved; i++) {
-            horiz_val += pot_h_prev_tick[i];
-            vert_val += pot_v_prev_tick[i];
+            horiz_val += pot_h_prev_tick.at(i);
+            vert_val += pot_v_prev_tick.at(i);
         }
 
+        /* MA2: Calculate the average */
         horiz_val /= (double) pot_prev_tick_samples_saved;
         vert_val /= (double) pot_prev_tick_samples_saved;
 
