@@ -1,6 +1,6 @@
 # ESP32 Etch-a-Sketch
 
-https://github.com/JSpeedie/ESP32-Etch-a-Sketch/assets/11791739/9b4392fa-0ebb-4d07-ba5f-08a906804ac6
+https://github.com/JSpeedie/ESP32-Etch-a-Sketch/assets/11791739/47f7ccbc-0f52-490f-ac45-8826ad53fd78
 
 ## Technical Description
 
@@ -78,7 +78,7 @@ perfectly horizontal or vertical lines. This is the expected behaviour when a
 user turns only one of the dials. With no noise filtering, the output from
 the ADC the potentiometers are connected to looks like this:
 
-https://github.com/JSpeedie/ESP32-Etch-a-Sketch/assets/11791739/db69f253-d8f8-4f31-abba-7b19f651e04a
+https://github.com/JSpeedie/ESP32-Etch-a-Sketch/assets/11791739/56705f8e-9c73-4dae-a9c0-8302c908acf5
 
 Of course this isn't acceptable for this project, and I had to mitigate the
 noise in some way. The first thing I tried was using the mean of a collection
@@ -86,7 +86,7 @@ of samples taken each tick and combining that with a Moving Average filter.
 Taking 3 samples per tick and using the means from the last 20 ticks for our
 moving average, we get a result that looks like this:
 
-https://github.com/JSpeedie/ESP32-Etch-a-Sketch/assets/11791739/b3a43953-420c-43f7-b8eb-649d14180485
+https://github.com/JSpeedie/ESP32-Etch-a-Sketch/assets/11791739/2f63a99c-8ff1-431a-86c7-bba096a53c6e
 
 It's much, much better, but turning only one of the horizontal or vertical
 dials results in choppy lines that are decorated with little spikes or
@@ -104,7 +104,7 @@ code to take the median rather than the mean and to put that through a 5-point
 Moving Average filter (down from 20-point). This results in cursor movement
 looking like this:
 
-https://github.com/JSpeedie/ESP32-Etch-a-Sketch/assets/11791739/7c6bf2ee-3b1b-474a-a1b1-549f72d5b65c
+https://github.com/JSpeedie/ESP32-Etch-a-Sketch/assets/11791739/020695a6-c11f-4220-a627-31fd335b7f1d
 
 Moving in the right direction! This was much closer to a 1 pixel wide vertical
 or horizontal line than the previous method, but it's still not where we want
@@ -178,7 +178,7 @@ the function:
 
 Which produced cursor movement that looked like this:
 
-https://github.com/JSpeedie/ESP32-Etch-a-Sketch/assets/11791739/5c1ace87-be00-4200-8bcc-acacf11ce73b
+https://github.com/JSpeedie/ESP32-Etch-a-Sketch/assets/11791739/7c3a3ed3-eaa3-4c2a-aaa5-6d3e84d6d765
 
 The certainty factor function I use at the time of writing is this:
 
@@ -188,7 +188,7 @@ The certainty factor function I use at the time of writing is this:
 
 And it produces cursor movement that looks like this:
 
-https://github.com/JSpeedie/ESP32-Etch-a-Sketch/assets/11791739/f6ffbc3a-4225-4dca-be5c-46276bd17728
+https://github.com/JSpeedie/ESP32-Etch-a-Sketch/assets/11791739/d2c3c931-3286-4b04-8c29-1bb22bdc2936
 
 You can see the cursor shakiness has been almost entirely eliminated.
 Essentially this function has the effect of giving the row or column the cursor
